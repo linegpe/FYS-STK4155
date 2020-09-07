@@ -157,13 +157,13 @@ plt.show()
 
 
 #Splitting of the data into training and test sets
-"""
+
 
 #Variance-bias tradeoff
 
-NumBootstraps = 10
+NumBootstraps = 50
 MaxPolyDeg = 5
-i=5
+
 ModelComplexity =np.arange(0,MaxPolyDeg+1)
 
 MSError= np.zeros(MaxPolyDeg+1)
@@ -173,26 +173,38 @@ Variance =np.zeros(MaxPolyDeg+1)
 #z_noise = np.ravel(z_noise)
 
 #for i in range(MaxPolyDeg+1):
-x = np.arange(0, 1, 0.05)
-y = np.arange(0, 1, 0.05)
+#x = np.arange(0, 1, 0.05)
+#y = np.arange(0, 1, 0.05)
 
-X_new = DesignMatrix(x,y,i)
-#z_noise_pred = np.empty((len(z_noise[0]), NumBootstraps))
-model = make_pipeline(PolynomialFeatures(degree=i), LinearRegression(fit_intercept=False))
-lin = LinearRegression(fit_intercept=False)
-for j in range(NumBootstraps):
-	X_, z_ = resample(X_new, z_noise)
-	z_noise_pred = lin.fit(X_, z_).predict(X_new)
-	print(z_noise_pred)"""
+for i in range(MaxPolyDeg+1):
 
-"""	MSError[i] = np.mean( np.mean((z_new_test - z_noise_pred[j])**2, axis=1, keepdims=True) )
-	Bias[i] = np.mean( (z_new_test - np.mean(z_new_pred[j], axis=1, keepdims=True))**2 )
-	Variance[i] = np.mean( np.var(z_new_pred[j], axis=1, keepdims=True) )
-print('Error:', MSError[i])
-print('Bias^2:', Bias[i])
-print('Var:', Variance[i])
-print('{} >= {} + {} = {}'.format(MSError[i], Bias[i], Variance[i], Bias[i]+Variance[i]))"""
+	X_new = DesignMatrix(x_scaled,y_scaled,5)
+	#z_noise_pred = np.empty((len(z_noise[0]), NumBootstraps))
+	model = LinearRegression(fit_intercept=False)
+	#lin = LinearRegression(fit_intercept=False)
+
+	X_train, X_test, z_train, z_test = train_test_split(X, z_scaled, test_size=0.2)
+	z_predict = np.empty((len(z_test), NumBootstraps))
+	z_test_new = z_test[:,np.newaxis]
+
+	for j in range(NumBootstraps):
+		X_, z_ = resample(X_train, z_train)
+		z_predict[:,j] = model.fit(X_, z_).predict(X_test).ravel()
+		#print(z_predict)
+
+	z_test_new = z_test[:,np.newaxis]
+	MSError[i] = np.mean(np.mean((z_test_new - z_predict)**2, axis=1, keepdims=True) )
+	print(np.mean(z_test))
+	print(np.mean(z_predict))
+	Bias[i] = np.mean( (z_test - np.mean(z_predict, axis=1, keepdims=True))**2 )
+	Variance[i] = np.mean( np.var(z_predict, axis=1, keepdims=True) )
+	#print('Error:', MSError[i])
+	print('Bias^2:', Bias[i])
+	print('Var:', Variance[i])
+	print('{} >= {} + {} = {}'.format(MSError[i], Bias[i], Variance[i], Bias[i]+Variance[i]))
 
 #model = make_pipeline(PolynomialFeatures(degree=degree), LinearRegression(fit_intercept=False))
 
-
+plt.plot(ModelComplexity,Bias)
+plt.legend()
+plt.show()
