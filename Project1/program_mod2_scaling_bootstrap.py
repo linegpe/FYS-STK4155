@@ -15,13 +15,19 @@ from statistical_functions import *
 from data_processing import *
 from print_and_plot import *
 
-#Setting x and y arrays
-x = np.arange(0, 1, 0.05)
-y = np.arange(0, 1, 0.05)
 
 #Polynomial degree, number of columns in the design matrix and number of data points
 PolyDeg = 5
 N = 20
+
+#Setting x and y arrays
+x = np.arange(0, 1, 1.0/N)
+y = np.arange(0, 1, 1.0/N)
+
+
+
+#x = np.sort(np.random.uniform(0,1,N))
+#y = np.sort(np.random.uniform(0,1,N))
 
 x, y = np.meshgrid(x,y)
 z = FrankeFunction(x, y)
