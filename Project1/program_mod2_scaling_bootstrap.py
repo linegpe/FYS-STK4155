@@ -33,8 +33,8 @@ x, y = np.meshgrid(x,y)
 z = FrankeFunction(x, y)
 
 #Adding noise and raveling
-#seed = 2022
-seed = 1402
+seed = 2022
+#seed = 1402
 alpha = 0.01
 z_noise = AddNoise(z,seed,alpha,N)
 z_noise_flat = np.matrix.ravel(z_noise)
@@ -66,7 +66,7 @@ SurfacePlot(x,y,z_noise,z_rescaled)
 
 #Variance-bias tradeoff
 NumBootstraps = 100
-MaxPolyDeg = 12
+MaxPolyDeg = 13
 
 ModelComplexity =np.arange(0,MaxPolyDeg+1)
 
@@ -78,6 +78,8 @@ MSError_test= np.zeros(MaxPolyDeg+1)
 Bias_test =np.zeros(MaxPolyDeg+1)
 Variance_test =np.zeros(MaxPolyDeg+1)
 
+MSError_train_boot = np.zeros(MaxPolyDeg+1)
+
 for i in range(MaxPolyDeg+1):
 	X_new = DesignMatrix(x_scaled,y_scaled,i)
 	#z_noise_pred = np.empty((len(z_noise[0]), NumBootstraps))
@@ -87,14 +89,22 @@ for i in range(MaxPolyDeg+1):
 
 	z_predict_train = np.empty((len(z_train), NumBootstraps))
 	z_predict_test = np.empty((len(z_test), NumBootstraps))
+	MSE_boot = np.zeros(NumBootstraps)
 	#z_test_new = z_test[:,np.newaxis]
 
 	for j in range(NumBootstraps):
 		X_, z_ = resample(X_train, z_train)
-		z_predict_test[:,j] = model.fit(X_, z_).predict(X_test).ravel()
-		z_predict_train[:,j] = model.fit(X_, z_).predict(X_train).ravel()
+
+		beta = np.linalg.pinv(X_.T.dot(X_)).dot(X_.T.dot(z_))
+		z_predict_test[:,j] = X_test.dot(beta)
+		z_predict_train[:,j] = X_train.dot(beta)
+		MSE_boot[j] = MSE(X_.dot(beta),z_)
+		#These two lines are equivalent
+		#z_predict_test[:,j] = model.fit(X_, z_).predict(X_test).ravel()
+		#z_predict_train[:,j] = model.fit(X_, z_).predict(X_train).ravel()
 
 	#print(np.shape(z_test))
+
 	z_test_new = z_test[:,np.newaxis]
 	z_train_new = z_train[:,np.newaxis]
 	#print(np.shape(z_test_new))
@@ -104,6 +114,7 @@ for i in range(MaxPolyDeg+1):
 	MSError_test[i] = np.mean(np.mean((z_test_new - z_predict_test)**2, axis=1, keepdims=True) )
 	Bias_test[i] = np.mean( (z_test_new - np.mean(z_predict_test, axis=1, keepdims=True))**2 )
 	Variance_test[i] = np.mean( np.var(z_predict_test, axis=1, keepdims=True) )
+	MSError_train_boot[i] = np.sum(MSE_boot)/NumBootstraps
 	#print('Error:', MSError[i])
 	#print('Bias^2:', Bias[i])
 	#print('Var:', Variance[i])
@@ -111,4 +122,4 @@ for i in range(MaxPolyDeg+1):
 
 #model = make_pipeline(PolynomialFeatures(degree=degree), LinearRegression(fit_intercept=False))
 
-PlotErrors(ModelComplexity,MSError_train,MSError_test,"MSE")
+PlotErrors(ModelComplexity,MSError_train_boot,MSError_test,"MSE")
