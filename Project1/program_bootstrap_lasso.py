@@ -94,6 +94,7 @@ MSError_train_boot = np.zeros(nlambdas)
 X_train, X_test, z_train, z_test = train_test_split(X, z_scaled, test_size=0.2)
 I = np.identity(int((PolyDeg+2)*(PolyDeg+1)/2))
 X = DesignMatrix(x_scaled,y_scaled,PolyDeg)
+betas = np.empty((nlambdas,int((PolyDeg+2)*(PolyDeg+1)/2)))
 
 for lam in range(nlambdas):
 	z_predict_train = np.empty((len(z_train), NumBootstraps))
@@ -110,6 +111,8 @@ for lam in range(nlambdas):
 		z_predict_test[:,j] = lasso_fit.predict(X_test)
 		z_predict_train = lasso_fit.predict(X_)
 		MSE_boot[j] = MSE(z_predict_train,z_)
+		beta_lasso = lasso_fit.coef_
+		betas[lam,:]=beta_lasso
 		"""ridge.fit(X_, z_)
 		z_predict_train[:,j] = ridge.predict(X_train)
 		z_predict_test[:,j] = ridge.predict(X_test)
@@ -124,13 +127,20 @@ for lam in range(nlambdas):
 
 #PlotErrors(lambdas,MSError_train_boot,MSError_test,"MSE")
 
-plt.plot(ModelComplexity,Variance_test,label="Test Variance")
-plt.plot(ModelComplexity,Bias_test,label="Test Bias")
-plt.plot(ModelComplexity,MSError_test,label="Test MSE")
+plt.plot(lambdas,MSError_train_boot,label="Train MSE")
+plt.plot(lambdas,MSError_test,label="Test MSE")
 plt.xlabel("Polynomial degree")
 plt.ylabel("Estimated error")
+plt.xscale("log")
 plt.legend()
-plt.show()​
+plt.show()
+
+for i in range(int((PolyDeg+2)*(PolyDeg+1)/2)):
+	plt.plot(lambdas,betas[:,i],"r")
+plt.xlabel("lambda")
+plt.ylabel("beta number")
+plt.xscale("log")
+plt.show()
 
 """
 plt.plot(lambdas,MSError_test,label=" test")
