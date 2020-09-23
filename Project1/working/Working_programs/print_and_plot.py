@@ -37,3 +37,14 @@ def PlotErrors(ModelComplexity, training_data_error, test_data_error, error_type
     plt.ylabel("Estimated error")
     plt.legend()
     plt.show()
+
+def WriteToFile(filename, method, z_train, z_predict, z_tilde, z_test):
+    f = open(filename, "a")
+    if (method=="MSE"):
+        train = MSE(z_train,z_tilde)
+        test = MSE(z_test,z_predict)
+    elif (method=="R2"):
+        train = R2(z_train,z_tilde)
+        test = R2(z_test,z_predict)
+    f.write("{0} {1} \n".format(float(train),float(test)))
+    f.close()
