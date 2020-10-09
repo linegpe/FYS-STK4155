@@ -1,4 +1,0 @@
-### DATA ANALYSIS WITH LINEAR REGRESSION METHODS WITH APPLICATION OF RESAMPLING TECHNIQUES
-#### APPLIED DATA ANALYSIS AND MACHINE LEARNING, FYS-STK4155
-
-This folder contians all codes written for Project 1, made in cooperation with Maria Markova 
