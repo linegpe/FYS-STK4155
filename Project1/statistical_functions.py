@@ -1,3 +1,5 @@
+# All statistical functions used in all other files
+
 import numpy as np
 import scipy.linalg as scl
 
@@ -21,5 +23,5 @@ def  ols_svd(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     u, s, v = scl.svd(x)
     return v.T @ scl.pinv(scl.diagsvd(s, u.shape[0], v.shape[0])) @ u.T @ y
 
-def BetaVar(X, alpha):
-    return  np.diag(alpha**2*np.linalg.pinv(X.T.dot(X)))
+def BetaVar(X, alpha, sigma):
+    return  sigma**2*np.diag(alpha**2*np.linalg.pinv(X.T.dot(X)))

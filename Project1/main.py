@@ -1,7 +1,10 @@
+# The main program is used to collecting results for the Franke's function
+
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 from random import random, seed
+from imageio import imread
 
 from sklearn.model_selection import train_test_split
 import scipy.linalg as scl
@@ -10,30 +13,34 @@ from sklearn.pipeline import make_pipeline
 from sklearn.utils import resample
 from sklearn.linear_model import LinearRegression
 import sklearn.linear_model as skl
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 from statistical_functions import *
 from data_processing import *
 from print_and_plot import *
 from regression_methods import *
+from resampling_methods import *
 
-
-#Polynomial degree, number of columns in the design matrix and number of data points
+# Setting polynomial degree, number of columns in the design matrix and number of data points
 PolyDeg = 5
 N = 20
-regression_method ="LASSO"
 
-#Setting x and y arrays
+# Choosing options
+regression_method ="Ridge" # "OLS", "Ridge" or "LASSO"
+option = "complexity" #"complexity" or "lambda"
+resampling = "bootstrap" # "bootstrap", "cv" or "no resampling"
+
+# Setting x and y arrays, setting Frankie's function
 x = np.arange(0, 1, 1.0/N)
 y = np.arange(0, 1, 1.0/N)
-#x = np.sort(np.random.uniform(0,1,N))
-#y = np.sort(np.random.uniform(0,1,N))
-
 x, y = np.meshgrid(x,y)
 z = FrankeFunction(x, y)
 
-#Adding noise and raveling
+# Adding noise and raveling
 seed = 2022
 alpha = 0.01
+
 z_noise = AddNoise(z,seed,alpha,N)
 z_noise_flat = np.matrix.ravel(z_noise)
 x_flat = np.ravel(x)
@@ -44,90 +51,180 @@ x_scaled, y_scaled, z_scaled, scaler = DataScaling(x_flat,y_flat,z_noise_flat)
 
 # Set up design matrix and scale the data
 X = DesignMatrix(x_scaled,y_scaled,PolyDeg)
+
 X_train, X_test, z_train, z_test = train_test_split(X, z_scaled, test_size=0.2)
 
+# Simple regression in case of 1 polynomial degree (done for testing different options before applying resampling)
 if (regression_method == "OLS"):
 	beta = OLS_beta(X_train, z_train)
 	z_tilde = OLS(X_train, z_train, X_train)
 	z_predict = OLS(X_train, z_train, X_test)
 	z_plot = OLS(X_train, z_train, X)
 elif(regression_method == "Ridge"):
-	beta = Ridge_beta(X_train, z_train, 0.01, PolyDeg)
-	z_tilde = Ridge(X_train, z_train, X_train, 0.01, PolyDeg)
-	z_predict = Ridge(X_train, z_train, X_test, 0.01, PolyDeg)
-	z_plot = Ridge(X_train, z_train, X, 0.01, PolyDeg)
+	lamb = 0.01 
+	beta = Ridge_beta(X_train, z_train, lamb, PolyDeg)
+	z_tilde = Ridge(X_train, z_train, X_train, lamb, PolyDeg)
+	z_predict = Ridge(X_train, z_train, X_test, lamb, PolyDeg)
+	z_plot = Ridge(X_train, z_train, X, lamb, PolyDeg)
 elif(regression_method == "LASSO"):
-	beta = LASSO_SKL_beta(X_train, z_train, 0.01)
-	z_tilde = LASSO_SKL(X_train, z_train, X_train, 0.01)
-	z_predict = LASSO_SKL(X_train, z_train, X_test, 0.01)
-	z_plot = LASSO_SKL(X_train, z_train, X, 0.01)
+	lamb = 0.01
+	beta = LASSO_SKL_beta(X_train, z_train, lamb)
+	z_tilde = LASSO_SKL(X_train, z_train, X_train, lamb)
+	z_predict = LASSO_SKL(X_train, z_train, X_test, lamb)
+	z_plot = LASSO_SKL(X_train, z_train, X, lamb)
 
-z_plot_split = np.zeros((N,N))
-z_plot_split = np.reshape(z_plot, (N,N))
-x_rescaled, y_rescaled, z_rescaled = DataRescaling(x_scaled,y_scaled,z_plot,scaler,N)
+# Rescaling data
+x_rescaled, y_rescaled, z_rescaled = DataRescaling(x_scaled,y_scaled,z_plot,scaler,N,N)
 
 # Print error estimations and plot the surfaces
 PrintErrors(z_train,z_tilde,z_test,z_predict)
-SurfacePlot(x,y,z_noise,z_rescaled)
+Plot_Franke_Test_Train(z_test,z_train, X_test, X_train, scaler, x, y, z_noise)
+Plot_Beta_with_Err(beta, X, alpha, 1)
 
 #-------------------------------------------------------Variance-bias tradeoff----------------------------------------------------------
 
 NumBootstraps = 100
-MaxPolyDeg = 12
 
+# Complexity study
+MaxPolyDeg = 13
+lamb = 0.01
 ModelComplexity =np.arange(0,MaxPolyDeg+1)
 
-MSError_test= np.zeros(MaxPolyDeg+1)
-Bias_test =np.zeros(MaxPolyDeg+1)
-Variance_test =np.zeros(MaxPolyDeg+1)
+# lambda study
+nlambdas = 100
+lambdas = np.logspace(-5, 5, nlambdas)
 
-MSError_train_boot = np.zeros(MaxPolyDeg+1)
+# Preparing the file
+filename = "Files/d_MSE_test50.txt"
+f = open(filename, "w")
+f.write("MSE test   MSE train\n")
+f.close()
 
-for i in range(MaxPolyDeg+1):
-	X_new = DesignMatrix(x_scaled,y_scaled,i)
+if(resampling == "bootstrap"):
 
-	X_train, X_test, z_train, z_test = train_test_split(X_new, z_scaled, test_size=0.2)
+	# -------------------- Bootstrap -------------------
 
-	z_predict_train = np.empty((len(z_train), NumBootstraps))
-	z_predict_test = np.empty((len(z_test), NumBootstraps))
-	MSE_boot = np.zeros(NumBootstraps)
+	if(option == "complexity"):
 
-	for j in range(NumBootstraps):
-		X_, z_ = resample(X_train, z_train)
+		f = open(filename, "a")
+		MSError_test= np.zeros(MaxPolyDeg+1)
+		Bias_test =np.zeros(MaxPolyDeg+1)
+		Variance_test =np.zeros(MaxPolyDeg+1)
+		R2_test =np.zeros(MaxPolyDeg+1)
+		MSError_train_boot = np.zeros(MaxPolyDeg+1)
 
-		if(regression_method == "Ridge"):
-			beta = Ridge_beta(X_, z_, 0.01, i)
-			z_predict_test[:,j] = Ridge(X_, z_, X_test, 0.01, i)
-			MSE_boot[j] = MSE(Ridge(X_, z_, X_, 0.01, i),z_)
-		elif(regression_method == "LASSO"):
-			beta = LASSO_SKL_beta(X_, z_, 0.01)
-			z_predict_test[:,j] = LASSO_SKL(X_, z_, X_test, 0.01)
-			MSE_boot[j] = MSE(LASSO_SKL(X_, z_, X_, 0.01),z_)
-		elif(regression_method == "OLS"):
-			beta = OLS_beta(X_, z_)
-			z_predict_test[:,j] = OLS(X_, z_, X_test)
-			MSE_boot[j] = MSE(OLS(X_, z_, X_),z_)
+		for i in range(MaxPolyDeg+1):
 
-		#These two lines are equivalent
-		#z_predict_test[:,j] = model.fit(X_, z_).predict(X_test).ravel()
-		#z_predict_train[:,j] = model.fit(X_, z_).predict(X_train).ravel()
+			X = DesignMatrix(x_scaled,y_scaled,i)
+			X_train, X_test, z_train, z_test = train_test_split(X, z_scaled, test_size=0.2)
+			MSError_test[i], Bias_test[i], Variance_test[i], MSError_train_boot[i], R2_test[i],beta = Bootstrap(X, X_test, z_test, X_train, z_train , lamb, NumBootstraps, i, regression_method)
+			f.write("{0} {1}\n".format(MSError_test[i], MSError_train_boot[i]))
 
-	z_test_new = z_test[:,np.newaxis]
+		f.close()
+		Plot_MSE_Test_Train(ModelComplexity, MSError_test, MSError_train_boot, regression_method, resampling, "model complexity",option)
+		Plot_Bias_Variance(ModelComplexity, MSError_test, Variance_test, Bias_test, regression_method, resampling, option)
 
-	MSError_test[i] = np.mean(np.mean((z_test_new - z_predict_test)**2, axis=1, keepdims=True) )
-	Bias_test[i] = np.mean( (z_test_new - np.mean(z_predict_test, axis=1, keepdims=True))**2 )
-	Variance_test[i] = np.mean( np.var(z_predict_test, axis=1, keepdims=True) )
-	MSError_train_boot[i] = np.sum(MSE_boot)/NumBootstraps
-	#print('Error:', MSError[i])
-	#print('Bias^2:', Bias[i])
-	#print('Var:', Variance[i])
-	#print('{} >= {} + {} = {}'.format(MSError[i], Bias[i], Variance[i], Bias[i]+Variance[i]))
+	if(option == "lambda"):
 
-#PlotErrors(ModelComplexity,MSError_train_boot,MSError_test,"MSE")
-plt.plot(ModelComplexity,Variance_test,label="Test Variance")
-plt.plot(ModelComplexity,Bias_test,label="Test Bias")
-plt.plot(ModelComplexity,MSError_test,label="Test MSE")
-plt.xlabel("Polynomial degree")
-plt.ylabel("Estimated error")
-plt.legend()
-plt.show()
+		f = open(filename, "a")
+		MSError_test= np.zeros(nlambdas)
+		Bias_test =np.zeros(nlambdas)
+		Variance_test =np.zeros(nlambdas)
+		R2_test =np.zeros(nlambdas)
+		MSError_train_boot = np.zeros(nlambdas)
+		betas = np.empty((nlambdas,int((PolyDeg+2)*(PolyDeg+1)/2)))
+
+		X = DesignMatrix(x_scaled,y_scaled,PolyDeg)
+		X_train, X_test, z_train, z_test = train_test_split(X, z_scaled, test_size=0.2)
+
+		for lam in range(nlambdas):
+			MSError_test[lam], Bias_test[lam], Variance_test[lam], MSError_train_boot[lam], R2_test[lam], betas[lam,:] = Bootstrap(x_scaled, y_scaled, z_scaled, lambdas[lam], NumBootstraps, PolyDeg, regression_method)
+			f.write("{0} {1}\n".format(MSError_test[lam], MSError_train_boot[lam]))
+
+		f.close()
+		Plot_MSE_Test_Train(lambdas, MSError_test, MSError_train_boot, regression_method, resampling, "$\lambda$",option)
+		Plot_Bias_Variance(lambdas, MSError_test, Variance_test, Bias_test, regression_method, resampling, option)
+		Plot_Betas(PolyDeg, betas, lambdas, regression_method, resampling)
+
+        # Minimum element for a given polynomial degree
+		MinElement(MSError_test)
+
+elif(resampling == "cv"):
+
+	# -------------------- Cross validation -------------------
+	nrk = 5
+
+	if(option == "complexity"):
+
+		f = open(filename, "a")
+
+		MSError_test = np.zeros(MaxPolyDeg+1)
+		MSError_train = np.zeros(MaxPolyDeg+1)
+		R2_test = np.zeros(MaxPolyDeg+1)
+		R2_train = np.zeros(MaxPolyDeg+1)
+
+		for i in range(MaxPolyDeg+1):
+			MSError_test[i], MSError_train[i], R2_test[i], R2_train[i], z_pred = Cross_Validation(nrk, x_scaled, y_scaled, z_scaled, lamb, i, regression_method)
+			f.write("{0} {1}\n".format(MSError_test[i], MSError_train[i]))
+
+		f.close()
+		Plot_MSE_Test_Train(ModelComplexity, MSError_test, MSError_train, regression_method, resampling, "model complexity",option)
+
+	elif(option == "lambda"):
+
+		f = open(filename, "a")
+
+		MSError_test = np.zeros(nlambdas)
+		MSError_train = np.zeros(nlambdas)
+		R2_test =np.zeros(nlambdas)
+		R2_train =np.zeros(nlambdas)
+
+		for lam in range(nlambdas):
+			MSError_test[lam], MSError_train[lam], R2_test[lam], R2_train[lam], z_pred = Cross_Validation(nrk, x_scaled, y_scaled, z_scaled, lambdas[lam], PolyDeg, regression_method)
+			f.write("{0} {1}\n".format(MSError_test[lam], MSError_train[lam]))
+
+		f.close()
+		Plot_MSE_Test_Train(lambdas, MSError_test, MSError_train, regression_method, resampling, "$\lambda$", option)
+
+        # Minimum element for a given polynomial degree
+		MinElement(MSError_test)
+
+elif(resampling == "no resampling"):
+	# -------------------- No resampling -------------------
+
+	if(option == "complexity"):
+
+		f = open(filename, "a")
+
+		MSError_test = np.zeros(MaxPolyDeg+1)
+		MSError_train = np.zeros(MaxPolyDeg+1)
+		R2_test = np.zeros(MaxPolyDeg+1)
+
+		for i in range(MaxPolyDeg+1):	
+			MSError_test[i], MSError_train[i], R2_test[i], z_pred = NoResampling(x_scaled, y_scaled, z_scaled, i, lamb, regression_method)
+			f.write("{0} {1}\n".format(MSError_test[i], MSError_train[i]))	
+
+		f.close()
+		Plot_MSE_Test_Train(ModelComplexity, MSError_test, MSError_train, regression_method, resampling, "model complexity",option)
+
+	elif(option == "lambda"):
+
+		f = open(filename, "a")
+
+		MSError_test= np.zeros(nlambdas)
+		MSError_train= np.zeros(nlambdas)
+		R2_test =np.zeros(nlambdas)
+
+		for lam in range(nlambdas):
+			MSError_test[lam], MSError_train[lam], R2_test, z_pred = NoResampling(x_scaled, y_scaled, z_scaled, PolyDeg, lambdas[lam], regression_method)
+			f.write("{0} {1}\n".format(MSError_test[lam], MSError_train[lam]))
+
+		f.close()
+		Plot_MSE_Test_Train(lambdas, MSError_test, MSError_train, regression_method, resampling, "$\lambda$", option)
+
+        # Minimum element for a given polynomial degree
+		MinElement(MSError_test)
+
+else:
+
+	print("Pick resampling option next time!")
